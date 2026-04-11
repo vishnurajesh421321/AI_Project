@@ -8,7 +8,7 @@ from fastapi import status, HTTPException, UploadFile, File, APIRouter
 router = APIRouter()
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-MAX_UPLOAD_SIZE = 35 #MB
+MAX_UPLOAD_SIZE = 25 #MB
 ALLOWED_TYPES = {
     "application/pdf": ".pdf",
     "text/csv": ".csv",
@@ -93,7 +93,7 @@ async def upload_file(file: UploadFile = File(...)):
     if len(data) > max_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="File too large. Max size is 10 MB",
+            detail="File too large. Max size is 25 MB",
         )
 
     saved_name = f"{uuid4().hex}{suffix}"
