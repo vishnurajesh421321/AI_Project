@@ -3,8 +3,6 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import status, HTTPException, UploadFile, File, APIRouter
-
-
 router = APIRouter()
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -15,41 +13,6 @@ ALLOWED_TYPES = {
     "application/csv": ".csv",
     "application/vnd.ms-excel": ".csv",  # browsers sometimes send this for CSV
 }
-def get_docling_converter():
-    from docling.document_converter import DocumentConverter, PdfFormatOption
-    from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions, TableStructureOptions
-
-    pdf_options = PdfPipelineOptions()
-    pdf_options.do_ocr = True
-    pdf_options.do_table_structure = True
-    pdf_options.table_structure_options = TableStructureOptions(do_cell_matching=True)
-
-    return DocumentConverter(
-        allowed_formats=[InputFormat.PDF, InputFormat.CSV],
-        format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_options),
-        },
-    )
-def extract_with_docling(file_path: Path, suffix: str) -> dict:
-    try:
-        doc_converter = get_docling_converter()
-        conv_result = doc_converter.convert(file_path)
-        doc = conv_result.document
-
-        extracted = {"markdown": doc.export_to_markdown(), "text": doc.export_to_text(),
-                     "structured": doc.export_to_dict(), "num_pages": getattr(doc, "num_pages", lambda: None)(),
-                     "file_type": "pdf" if suffix == ".pdf" else "csv"}
-
-        # Optional metadata
-
-        return extracted
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to extract document data: {str(e)}",
-        ) from e
 
 def validate_upload(file: UploadFile) -> str:
     if not file.filename:
@@ -100,7 +63,6 @@ async def upload_file(file: UploadFile = File(...)):
     saved_path = UPLOAD_DIR / saved_name
     saved_path.write_bytes(data)
 
-    extracted = extract_with_docling(saved_path, suffix)
 
     response = {
         "message": "Upload successful",
@@ -108,8 +70,8 @@ async def upload_file(file: UploadFile = File(...)):
         "stored_filename": saved_name,
         "content_type": file.content_type,
         "size_bytes": len(data),
-        "file_type": "pdf" if suffix == ".pdf" else "csv",
-        "extracted": extracted,
+        "file_type": "pdf" if suffix == ".pdf" else "csv"
     }
 
     return response
+
