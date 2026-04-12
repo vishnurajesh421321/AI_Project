@@ -1,9 +1,10 @@
+import getpass
 import os
 from pathlib import Path
 
 from langchain_community.document_loaders import CSVLoader, PyMuPDFLoader
 from langchain_core.documents import Document
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pinecone import ServerlessSpec, Pinecone
 
@@ -61,17 +62,15 @@ def data_extraction(stored_filename: str):
         )
         chunks = splitter.split_documents(data)
 
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001"
-        )
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
         pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
         index_name = "developer-quickstart-py"
-
+        print(os.environ["PINECONE_API_KEY"])
         # Compute one embedding to get the true dimension
         test_vector = embeddings.embed_query("dimension check")
         dimension = len(test_vector)
-
+        print(pc.list_indexes())
         if not pc.has_index(index_name):
             pc.create_index(
                 name=index_name,
@@ -113,4 +112,5 @@ def data_extraction(stored_filename: str):
         return "Success: Embedded and stored in Pinecone."
     except UnsupportedFileTypeError as e:
         return e
+
 
