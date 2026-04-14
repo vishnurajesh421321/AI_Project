@@ -43,6 +43,9 @@ EMBED_MAX_RETRIES = int(os.getenv("EMBED_MAX_RETRIES", "6"))
 EMBED_BASE_DELAY = float(os.getenv("EMBED_BASE_DELAY", "2.0"))
 EMBED_MAX_DELAY = float(os.getenv("EMBED_MAX_DELAY", "30.0"))
 
+# Optional per-upload throttling between embedding batch calls (seconds).
+EMBED_MIN_INTERVAL_SECONDS = float(os.getenv("EMBED_MIN_INTERVAL_SECONDS", "0.5"))
+
 
 class UnsupportedFileTypeError(ValueError):
     pass
@@ -153,6 +156,12 @@ def ensure_index(pc: Pinecone, embeddings: GoogleGenerativeAIEmbeddings) -> None
 def _is_retryable_embedding_error(exc: Exception) -> bool:
     message = str(exc).lower()
     retry_markers = [
+        "429",
+        "resource exhausted",
+        "resource_exhausted",
+        "quota",
+        "rate limit",
+        "too many requests",
         "503",
         "unavailable",
         "service is currently unavailable",
@@ -216,6 +225,7 @@ def build_vectors(
 ) -> list[dict[str, Any]]:
     texts = [chunk.page_content for chunk in chunks]
     vectors: list[dict[str, Any]] = []
+    last_embed_request_at = 0.0
 
     logger.info("Generating embeddings for %d chunk(s)", len(texts))
 
@@ -223,7 +233,18 @@ def build_vectors(
         batch_chunks = chunks[start : start + EMBED_BATCH_SIZE]
         batch_texts = texts[start : start + EMBED_BATCH_SIZE]
 
+        if EMBED_MIN_INTERVAL_SECONDS > 0:
+            elapsed = time.monotonic() - last_embed_request_at
+            if elapsed < EMBED_MIN_INTERVAL_SECONDS:
+                sleep_for = EMBED_MIN_INTERVAL_SECONDS - elapsed
+                logger.info(
+                    "Throttling embedding requests for %.2fs to reduce rate-limit risk",
+                    sleep_for,
+                )
+                time.sleep(sleep_for)
+
         batch_vectors = embed_documents_with_retry(embeddings, batch_texts)
+        last_embed_request_at = time.monotonic()
 
         for offset, (chunk, vector) in enumerate(zip(batch_chunks, batch_vectors)):
             i = start + offset
